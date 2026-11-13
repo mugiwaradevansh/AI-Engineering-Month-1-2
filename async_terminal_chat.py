@@ -39,8 +39,8 @@ class AsyncLLMClient:
     def __init__(
         self,
         api_key: str,
-        model: str = "gemini-3.8-flash",
-        timeout: float = 60.0,
+        model: str = "gemini-2.5-flash",
+        timeout: float = 120.0,
     ) -> None:
         if not api_key.strip():
             raise ValueError("The Gemini API key is empty.")
@@ -124,6 +124,8 @@ class AsyncLLMClient:
             json=payload,
         ) as response:
 
+            if response.is_error:
+                await response.aread()
             response.raise_for_status()
 
             async for line in response.aiter_lines():
@@ -180,7 +182,13 @@ async def main() -> None:
     load_dotenv()
 
     api_key = os.getenv("GEMINI_KEY") or os.getenv("GEMINI_API_KEY")
-    model = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip()
+    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+    try:
+        timeout = float(os.getenv("GEMINI_TIMEOUT", "120"))
+    except ValueError as error:
+        raise ValueError("GEMINI_TIMEOUT must be a number of seconds.") from error
+    if timeout <= 0:
+        raise ValueError("GEMINI_TIMEOUT must be greater than zero.")
 
     if not api_key:
         print("Missing API key. Add GEMINI_KEY=your_key to your .env file.")
@@ -194,7 +202,11 @@ async def main() -> None:
     print("Your conversation history lasts until you exit this program.\n")
 
     try:
-        async with AsyncLLMClient(api_key=api_key, model=model) as llm:
+        async with AsyncLLMClient(
+            api_key=api_key,
+            model=model,
+            timeout=timeout,
+        ) as llm:
 
             while True:
                 try:
